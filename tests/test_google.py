@@ -5949,6 +5949,18 @@ def test_gmail_raw_with_attachment_is_valid_mime(tmp_path):
 _GMAIL_SHAPES = [
     {
         "source_type": "gmail",
+        "doc_id": "two-att",
+        "mailbox": "ceo",
+        "title": "Two attachments",
+        "content": "see attached",
+        "author_email": "ceo@x.com",
+        "attachments": [
+            {"filename": "first.txt", "mime": "text/plain", "content": "hello"},
+            {"filename": "second.txt", "mime": "text/plain"},
+        ],
+    },
+    {
+        "source_type": "gmail",
         "doc_id": "att",
         "mailbox": "ceo",
         "title": "With attachment",
@@ -6113,7 +6125,9 @@ def test_gmail_a_text_attachment_names_us_ascii_or_utf8_by_its_content(gmail_sha
     }
 
 
-@pytest.mark.parametrize("doc", ["att", "lt", "ko", "html175", "html325", "att-ko", "hdr-ko"])
+@pytest.mark.parametrize(
+    "doc", ["att", "lt", "ko", "html175", "html325", "att-ko", "hdr-ko", "two-att"]
+)
 def test_gmail_raw_and_full_describe_one_message(gmail_shapes, doc):
     """`format=raw` is ASCII, and it and the `full` payload are the same tree, with the same
     headers on the message and on each part once `raw`'s encoded-words are decoded, and each raw
@@ -6145,6 +6159,13 @@ def test_gmail_raw_and_full_describe_one_message(gmail_shapes, doc):
                 # encoded, not only labelled: RFC 2045 holds both to ASCII lines of at most 76
                 body = entity.get_payload()
                 assert body.isascii() and max(map(len, body.splitlines())) <= 76
+        elif "attachmentId" in part["body"]:
+            r = client.get(f"{url}/attachments/{part['body']['attachmentId']}", headers=h)
+            assert r.status_code == 200
+            attachment = r.json()
+            data = base64.urlsafe_b64decode(attachment["data"])
+            assert entity.get_payload(decode=True) == data
+            assert attachment["size"] == part["body"]["size"] == len(data)
 
     assert mime.get_content_type() == full["mimeType"]
     assert {k: str(v) for k, v in mime.items()} == _hdrs(full)
